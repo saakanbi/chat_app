@@ -39,11 +39,9 @@ pipeline {
     post {
         success {
             echo 'Deployment successful!'
-            slackSend(color: 'good', message: "Deployment successful: ${env.JOB_NAME} #${env.BUILD_NUMBER}")
         }
         failure {
             echo 'Deployment failed!'
-            slackSend(color: 'danger', message: "Deployment failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}")
         }
     }
 }
