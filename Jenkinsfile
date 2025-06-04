@@ -14,7 +14,10 @@ pipeline {
         
         stage('Install Dependencies') {
             steps {
-                sh 'npm install'
+                // Use Docker to run npm install to avoid GLIBC version issues
+                sh '''
+                    docker run --rm -v "$PWD":/app -w /app node:16-alpine npm install
+                '''
             }
         }
         
@@ -39,9 +42,11 @@ pipeline {
     post {
         success {
             echo 'Deployment successful!'
+            slackSend(channel: '#deployments', color: 'good', message: "Deployment successful: ${env.JOB_NAME} #${env.BUILD_NUMBER}")
         }
         failure {
             echo 'Deployment failed!'
+            slackSend(channel: '#deployments', color: 'danger', message: "Deployment failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}")
         }
     }
 }
