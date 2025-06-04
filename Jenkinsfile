@@ -30,9 +30,15 @@ pipeline {
         stage('Deploy to EC2') {
             steps {
                 withCredentials([sshUserPrivateKey(credentialsId: 'ec2-ssh-key', keyFileVariable: 'SSH_KEY')]) {
+                    // Use Docker to run Ansible since it's not installed on the Jenkins server
                     sh '''
-                        # Run Ansible playbook with explicit SSH key
-                        ansible-playbook -i ansible-inventory.ini ansible-playbook.yml --private-key="$SSH_KEY" -e "ansible_ssh_private_key_file=$SSH_KEY"
+                        docker run --rm \
+                        -v "$PWD":/ansible \
+                        -v "$SSH_KEY":/ssh-key \
+                        -w /ansible \
+                        cytopia/ansible:latest \
+                        ansible-playbook -i ansible-inventory.ini ansible-playbook.yml \
+                        --private-key="/ssh-key" -e "ansible_ssh_private_key_file=/ssh-key"
                     '''
                 }
             }
@@ -42,11 +48,9 @@ pipeline {
     post {
         success {
             echo 'Deployment successful!'
-            slackSend(channel: '#deployments', color: 'good', message: "Deployment successful: ${env.JOB_NAME} #${env.BUILD_NUMBER}")
         }
         failure {
             echo 'Deployment failed!'
-            slackSend(channel: '#deployments', color: 'danger', message: "Deployment failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}")
         }
     }
 }
