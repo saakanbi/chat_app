@@ -30,15 +30,17 @@ pipeline {
         stage('Deploy to EC2') {
             steps {
                 withCredentials([sshUserPrivateKey(credentialsId: 'ec2-ssh-key', keyFileVariable: 'SSH_KEY')]) {
-                    // Use Docker to run Ansible since it's not installed on the Jenkins server
+                    // Use Docker to run Ansible with SSH support
                     sh '''
                         docker run --rm \
                         -v "$PWD":/ansible \
                         -v "$SSH_KEY":/ssh-key \
                         -w /ansible \
-                        cytopia/ansible:latest \
-                        ansible-playbook -i ansible-inventory.ini ansible-playbook.yml \
-                        --private-key="/ssh-key" -e "ansible_ssh_private_key_file=/ssh-key"
+                        --entrypoint ansible-playbook \
+                        willhallonline/ansible:latest \
+                        -i ansible-inventory.ini ansible-playbook.yml \
+                        --private-key="/ssh-key" -e "ansible_ssh_private_key_file=/ssh-key" \
+                        -e "ansible_ssh_common_args='-o StrictHostKeyChecking=no'"
                     '''
                 }
             }
