@@ -30,16 +30,21 @@ pipeline {
         stage('Deploy to EC2') {
             steps {
                 withCredentials([sshUserPrivateKey(credentialsId: 'ec2-ssh-key', keyFileVariable: 'SSH_KEY')]) {
-                    // Use Docker to run Ansible with SSH support
+                    // Copy SSH key to a temporary file with correct permissions
                     sh '''
+                        mkdir -p ~/.ssh
+                        cp "$SSH_KEY" ~/.ssh/id_rsa
+                        chmod 600 ~/.ssh/id_rsa
+                        
+                        # Run Ansible directly on the host
                         docker run --rm \
                         -v "$PWD":/ansible \
-                        -v "$SSH_KEY":/ssh-key \
+                        -v ~/.ssh:/root/.ssh \
                         -w /ansible \
                         --entrypoint ansible-playbook \
                         willhallonline/ansible:latest \
                         -i ansible-inventory.ini ansible-playbook.yml \
-                        --private-key="/ssh-key" -e "ansible_ssh_private_key_file=/ssh-key" \
+                        --private-key="/root/.ssh/id_rsa" \
                         -e "ansible_ssh_common_args='-o StrictHostKeyChecking=no'"
                     '''
                 }
