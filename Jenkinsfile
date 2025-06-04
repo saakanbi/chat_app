@@ -29,40 +29,24 @@ pipeline {
         
         stage('Deploy to EC2') {
             steps {
-                withCredentials([sshUserPrivateKey(credentialsId: 'ec2-ssh-key', keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER')]) {
-                    // Create a temporary directory for SSH key with proper permissions
-                    sh '''
-                        # Create temp directory for SSH key
-                        SSH_DIR="$(mktemp -d)"
-                        echo "$SSH_KEY" > "$SSH_DIR/id_rsa"
-                        chmod 600 "$SSH_DIR/id_rsa"
-                        
-                        # Run Ansible in Docker with the SSH key
-                        docker run --rm \
-                        -v "$PWD":/ansible \
-                        -v "$SSH_DIR":/ssh \
-                        -w /ansible \
-                        --entrypoint ansible-playbook \
-                        willhallonline/ansible:latest \
-                        -i ansible-inventory.ini ansible-playbook.yml \
-                        --private-key="/ssh/id_rsa" \
-                        -e "ansible_ssh_common_args='-o StrictHostKeyChecking=no'" \
-                        -e "ansible_user=ec2-user"
-                        
-                        # Clean up
-                        rm -rf "$SSH_DIR"
-                    '''
-                }
+                // Skip deployment for now to focus on building and testing
+                echo 'Skipping deployment to EC2 for now'
+                
+                // Archive the build artifacts
+                sh '''
+                    tar -czf chat-app.tar.gz app.js index.html public package.json
+                '''
+                archiveArtifacts artifacts: 'chat-app.tar.gz', fingerprint: true
             }
         }
     }
     
     post {
         success {
-            echo 'Deployment successful!'
+            echo 'Build and test successful!'
         }
         failure {
-            echo 'Deployment failed!'
+            echo 'Build or test failed!'
         }
     }
 }
