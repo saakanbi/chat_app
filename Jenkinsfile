@@ -29,23 +29,28 @@ pipeline {
         
         stage('Deploy to EC2') {
             steps {
-                withCredentials([sshUserPrivateKey(credentialsId: 'ec2-ssh-key', keyFileVariable: 'SSH_KEY')]) {
-                    // Copy SSH key to a temporary file with correct permissions
+                withCredentials([sshUserPrivateKey(credentialsId: 'ec2-ssh-key', keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER')]) {
+                    // Create a temporary directory for SSH key with proper permissions
                     sh '''
-                        mkdir -p ~/.ssh
-                        cp "$SSH_KEY" ~/.ssh/id_rsa
-                        chmod 600 ~/.ssh/id_rsa
+                        # Create temp directory for SSH key
+                        SSH_DIR="$(mktemp -d)"
+                        echo "$SSH_KEY" > "$SSH_DIR/id_rsa"
+                        chmod 600 "$SSH_DIR/id_rsa"
                         
-                        # Run Ansible directly on the host
+                        # Run Ansible in Docker with the SSH key
                         docker run --rm \
                         -v "$PWD":/ansible \
-                        -v ~/.ssh:/root/.ssh \
+                        -v "$SSH_DIR":/ssh \
                         -w /ansible \
                         --entrypoint ansible-playbook \
                         willhallonline/ansible:latest \
                         -i ansible-inventory.ini ansible-playbook.yml \
-                        --private-key="/root/.ssh/id_rsa" \
-                        -e "ansible_ssh_common_args='-o StrictHostKeyChecking=no'"
+                        --private-key="/ssh/id_rsa" \
+                        -e "ansible_ssh_common_args='-o StrictHostKeyChecking=no'" \
+                        -e "ansible_user=ec2-user"
+                        
+                        # Clean up
+                        rm -rf "$SSH_DIR"
                     '''
                 }
             }
