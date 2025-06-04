@@ -1,0 +1,170 @@
+---
+- name: Configure EC2 instance for Chat App
+  hosts: chat_servers
+  become: yes
+  vars:
+    app_dir: /var/www/chat-app
+    node_version: 16.x
+
+  tasks:
+    - name: Update yum cache
+      yum:
+        update_cache: yes
+
+    - name: Install EPEL repository
+      yum:
+        name: https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+        state: present
+        
+    - name: Install required packages
+      yum:
+        name:
+          - nginx
+          - git
+          - curl
+        state: present
+        enablerepo: epel
+
+    - name: Add NodeSource repository
+      shell: |
+        curl -fsSL https://rpm.nodesource.com/setup_{{ node_version }} | bash -
+      args:
+        warn: false
+
+    - name: Install Node.js
+      yum:
+        name: nodejs
+        state: present
+
+    - name: Create app directory
+      file:
+        path: "{{ app_dir }}"
+        state: directory
+        owner: ec2-user
+        group: ec2-user
+        mode: '0755'
+
+    - name: Copy application files
+      copy:
+        src: /home/ec2-user/chat-app/
+        dest: "{{ app_dir }}"
+        remote_src: no
+      become_user: ec2-user
+
+    - name: Install npm dependencies
+      npm:
+        path: "{{ app_dir }}"
+        state: present
+      become_user: ec2-user
+
+    - name: Create Nginx configuration
+      copy:
+        content: |
+          server {
+              listen 80;
+              server_name {{ ansible_host }};
+
+              location / {
+                  proxy_pass http://localhost:3000;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade $http_upgrade;
+                  proxy_set_header Connection 'upgrade';
+                  proxy_set_header Host $host;
+                  proxy_cache_bypass $http_upgrade;
+              }
+          }
+        dest: /etc/nginx/conf.d/chat-app.conf
+
+    - name: Create systemd service file
+      copy:
+        content: |
+          [Unit]
+          Description=Node.js Chat Application
+          After=network.target
+
+          [Service]
+          User=ec2-user
+          WorkingDirectory={{ app_dir }}
+          ExecStart=/usr/bin/node app.js
+          Restart=always
+          RestartSec=10
+          StandardOutput=syslog
+          StandardError=syslog
+          SyslogIdentifier=chat-app
+
+          [Install]
+          WantedBy=multi-user.target
+        dest: /etc/systemd/system/chat-app.service
+
+    - name: Reload systemd
+      systemd:
+        daemon_reload: yes
+
+    - name: Enable and start chat-app service
+      systemd:
+        name: chat-app
+        state: started
+        enabled: yes
+
+    - name: Restart Nginx
+      service:
+        name: nginx
+        state: restarted
+
+- name: Configure Jenkins Server
+  hosts: jenkins
+  become: yes
+  tasks:
+    - name: Install Java 17
+      yum:
+        name: java-17-amazon-corretto
+        state: present
+
+    - name: Add Jenkins repository
+      get_url:
+        url: https://pkg.jenkins.io/redhat-stable/jenkins.repo
+        dest: /etc/yum.repos.d/jenkins.repo
+
+    - name: Import Jenkins key
+      rpm_key:
+        state: present
+        key: https://pkg.jenkins.io/redhat-stable/jenkins.io.key
+
+    - name: Install Jenkins
+      yum:
+        name: jenkins
+        state: present
+
+    - name: Start Jenkins service
+      systemd:
+        name: jenkins
+        state: started
+        enabled: yes
+
+    - name: Wait for Jenkins to start
+      wait_for:
+        port: 8080
+        delay: 10
+        timeout: 300
+
+    - name: Get Jenkins initial admin password
+      shell: cat /var/lib/jenkins/secrets/initialAdminPassword
+      register: jenkins_password
+      changed_when: false
+
+    - name: Display Jenkins initial admin password
+      debug:
+        msg: "Jenkins initial admin password: {{ jenkins_password.stdout }}"
+
+    - name: Install Git for Jenkins
+      yum:
+        name: git
+        state: present
+
+    - name: Copy Jenkinsfile to Jenkins home
+      copy:
+        src: /home/ec2-user/chat-app/Jenkinsfile
+        dest: /var/lib/jenkins/Jenkinsfile
+        owner: jenkins
+        group: jenkins
+        remote_src: yes

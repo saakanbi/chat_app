@@ -1,0 +1,42 @@
+/* Main styles for the chat application */
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  margin: 0;
+  padding: 0;
+  background: #f5f5f5;
+  color: #333;
+}
+
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+h1 {
+  text-align: center;
+  color: #4a69bd;
+}
+
+/* Status indicator */
+.status-indicator {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.status-indicator span {
+  display: inline-block;
+  padding: 5px 10px;
+  border-radius: 15px;
+  font-size: 14px;
+}
+
+.status-online {
+  background-color: #2ecc71;
+  color: white;
+}
+
+.status-offline {
+  background-color: #e74c3c;
+  color: white;
+}
