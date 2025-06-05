@@ -32,7 +32,9 @@
       <div id="typing-indicator"></div>
       <form id="message-form" class="message-form">
         <input id="message-input" class="message-input" autocomplete="off" placeholder="Type a message...">
+        <button id="emoji-button" type="button" class="join-button" style="margin-right: 5px;">😊</button>
         <button class="send-button" type="submit">Send</button>
+        <div id="emoji-picker" class="emoji-picker" style="display: none;"></div>
       </form>
     </div>
   </div>
@@ -45,6 +47,32 @@
     let typingTimeout;
     const typingUsers = new Set();
     const seenMessages = new Set();
+    let quoteMessageId = null;
+    let quotedMessageData = null;
+    
+    // Emoji mapping
+    const emojiMap = {
+      'smile': '😊',
+      'laugh': '😂',
+      'wink': '😉',
+      'heart': '❤️',
+      'thumbsup': '👍',
+      'thumbsdown': '👎',
+      'clap': '👏',
+      'fire': '🔥',
+      'thinking': '🤔',
+      'cry': '😢',
+      'angry': '😠',
+      'cool': '😎',
+      'party': '🎉',
+      'eyes': '👀',
+      'ok': '👌',
+      'love': '😍',
+      'sad': '😔',
+      'shocked': '😱',
+      'lol': '🤣',
+      'facepalm': '🤦‍♂️'
+    };
 
     const usernameForm = document.getElementById('username-form');
     const usernameInput = document.getElementById('username-input');
@@ -97,10 +125,20 @@
       const text = messageInput.value.trim();
       if (text) {
         const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        socket.emit('chat message', { text, user: username, time });
+        const messageData = { text, user: username, time };
+        
+        // Add quoted message if exists
+        if (quotedMessageData) {
+          messageData.quotedMessage = quotedMessageData;
+        }
+        
+        socket.emit('chat message', messageData);
         messageInput.value = '';
         socket.emit('stop typing');
         typing = false;
+        
+        // Clear quote after sending
+        cancelQuote();
       }
     });
 
@@ -118,14 +156,32 @@
 
     const messageElements = new Map(); // messageId => DOM element
 
-    function appendMessage({ id, text, user, time, self, delivered, seen }) {
+    function appendMessage({ id, text, user, time, self, delivered, seen, quotedMessage }) {
       const msgDiv = document.createElement('div');
       msgDiv.classList.add('message', self ? 'sent' : 'received');
       msgDiv.dataset.messageId = id;
       msgDiv.dataset.self = self;
+      msgDiv.dataset.text = text;
+      msgDiv.dataset.user = user;
 
       const content = document.createElement('div');
-      content.textContent = self ? text : `${user}: ${text}`;
+      content.classList.add('message-content');
+      
+      // Add quoted message if exists
+      if (quotedMessage) {
+        const quoteDiv = document.createElement('div');
+        quoteDiv.classList.add('quoted-message');
+        quoteDiv.textContent = quotedMessage.user ? `${quotedMessage.user}: ${quotedMessage.text}` : quotedMessage.text;
+        content.appendChild(quoteDiv);
+      }
+      
+      // Convert emoji shortcodes to actual emojis
+      const processedText = text.replace(/:([\w+-]+):/g, (match, code) => {
+        const emoji = emojiMap[code];
+        return emoji || match;
+      });
+      
+      content.appendChild(document.createTextNode(self ? processedText : `${user}: ${processedText}`));
       msgDiv.appendChild(content);
 
       const meta = document.createElement('div');
@@ -146,6 +202,16 @@
       msgDiv.appendChild(meta);
       messagesContainer.appendChild(msgDiv);
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+      // Add click event for quoting messages
+      msgDiv.addEventListener('click', () => {
+        if (quoteMessageId === id) {
+          // Cancel quote if clicking the same message again
+          cancelQuote();
+        } else {
+          quoteMessage(id, user, text);
+        }
+      });
 
       if (!self && id) {
         observer.observe(msgDiv);
@@ -215,6 +281,111 @@
         : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]} are typing`;
 
       typingIndicator.innerHTML = `<span>${typingText}</span>`;
+    }
+    
+    // Quote message functionality
+    function quoteMessage(id, user, text) {
+      const message = messageElements.get(id);
+      if (!message) return;
+      
+      quoteMessageId = id;
+      quotedMessageData = { user, text };
+      
+      // Show quote indicator
+      const quoteIndicator = document.createElement('div');
+      quoteIndicator.id = 'quote-indicator';
+      quoteIndicator.style.padding = '8px';
+      quoteIndicator.style.backgroundColor = '#f0f0f0';
+      quoteIndicator.style.borderRadius = '4px';
+      quoteIndicator.style.margin = '5px 0';
+      quoteIndicator.style.display = 'flex';
+      quoteIndicator.style.justifyContent = 'space-between';
+      quoteIndicator.style.alignItems = 'center';
+      
+      const quoteText = document.createElement('div');
+      quoteText.innerHTML = `<strong>Replying to ${user}:</strong> ${text.substring(0, 50)}${text.length > 50 ? '...' : ''}`;
+      quoteIndicator.appendChild(quoteText);
+      
+      const cancelBtn = document.createElement('button');
+      cancelBtn.textContent = '✕';
+      cancelBtn.style.background = 'none';
+      cancelBtn.style.border = 'none';
+      cancelBtn.style.cursor = 'pointer';
+      cancelBtn.style.fontSize = '16px';
+      cancelBtn.onclick = (e) => {
+        e.stopPropagation();
+        cancelQuote();
+      };
+      quoteIndicator.appendChild(cancelBtn);
+      
+      // Remove existing quote indicator if any
+      const existingIndicator = document.getElementById('quote-indicator');
+      if (existingIndicator) {
+        existingIndicator.remove();
+      }
+      
+      // Add before the message form
+      messageForm.insertAdjacentElement('beforebegin', quoteIndicator);
+      
+      // Focus on input
+      messageInput.focus();
+    }
+    
+    function cancelQuote() {
+      quoteMessageId = null;
+      quotedMessageData = null;
+      const quoteIndicator = document.getElementById('quote-indicator');
+      if (quoteIndicator) {
+        quoteIndicator.remove();
+      }
+    }
+    
+    // Emoji picker functionality
+    const emojiButton = document.getElementById('emoji-button');
+    const emojiPicker = document.getElementById('emoji-picker');
+    
+    // Populate emoji picker
+    function populateEmojiPicker() {
+      emojiPicker.innerHTML = '';
+      Object.entries(emojiMap).forEach(([code, emoji]) => {
+        const emojiBtn = document.createElement('div');
+        emojiBtn.classList.add('emoji-btn');
+        emojiBtn.textContent = emoji;
+        emojiBtn.title = `:${code}:`;
+        emojiBtn.addEventListener('click', () => {
+          insertEmoji(`:${code}:`);
+          emojiPicker.style.display = 'none';
+        });
+        emojiPicker.appendChild(emojiBtn);
+      });
+    }
+    
+    populateEmojiPicker();
+    
+    emojiButton.addEventListener('click', () => {
+      if (emojiPicker.style.display === 'none') {
+        emojiPicker.style.display = 'grid';
+      } else {
+        emojiPicker.style.display = 'none';
+      }
+    });
+    
+    // Close emoji picker when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!emojiButton.contains(e.target) && !emojiPicker.contains(e.target)) {
+        emojiPicker.style.display = 'none';
+      }
+    });
+    
+    function insertEmoji(emojiCode) {
+      const cursorPos = messageInput.selectionStart;
+      const textBefore = messageInput.value.substring(0, cursorPos);
+      const textAfter = messageInput.value.substring(cursorPos);
+      
+      messageInput.value = textBefore + emojiCode + textAfter;
+      messageInput.focus();
+      messageInput.selectionStart = cursorPos + emojiCode.length;
+      messageInput.selectionEnd = cursorPos + emojiCode.length;
     }
   </script>
 </body>
