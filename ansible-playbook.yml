@@ -11,10 +11,10 @@
       yum:
         update_cache: yes
 
-    - name: Install EPEL repository
-      yum:
-        name: https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
-        state: present
+    - name: Install EPEL repository for Amazon Linux 2
+      command: sudo amazon-linux-extras install epel -y
+      args:
+        creates: /etc/yum.repos.d/epel.repo
         
     - name: Install required packages
       yum:
