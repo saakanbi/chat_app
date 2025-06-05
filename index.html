@@ -23,7 +23,10 @@
     <div id="chat-interface" class="chat-container" style="display: none;">
       <div class="chat-header">
         <h2>Chat Room</h2>
-        <p>Connected as: <span id="current-user"></span></p>
+        <div class="user-status">
+          <span class="online-indicator"></span>
+          <p>Connected as: <span id="current-user"></span></p>
+        </div>
       </div>
       <div id="messages" class="chat-messages"></div>
       <div id="typing-indicator"></div>
@@ -41,6 +44,7 @@
     let typing = false;
     let typingTimeout;
     const typingUsers = new Set();
+    const seenMessages = new Set();
 
     const usernameForm = document.getElementById('username-form');
     const usernameInput = document.getElementById('username-input');
@@ -54,7 +58,19 @@
     const toggleBtn = document.getElementById('toggle-dark-mode');
     const icon = document.getElementById('mode-icon');
 
-    // 🌙 Load dark mode preference
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        const el = entry.target;
+        const messageId = el.dataset.messageId;
+        const isSelf = el.dataset.self === 'true';
+
+        if (entry.isIntersecting && !isSelf && messageId && !seenMessages.has(messageId)) {
+          socket.emit('message seen', messageId);
+          seenMessages.add(messageId);
+        }
+      }
+    }, { threshold: 1.0 });
+
     if (localStorage.getItem('darkMode') === 'true') {
       document.body.classList.add('dark-mode');
       icon.textContent = '🌞';
@@ -67,21 +83,15 @@
       icon.textContent = isDark ? '🌞' : '🌙';
     });
 
-    // ✅ Join chat with validation
     joinButton.addEventListener('click', () => {
       username = usernameInput.value.trim();
-      if (!username) {
-        alert("Please enter a username.");
-        return;
-      }
-
+      if (!username) return alert("Please enter a username.");
       usernameForm.style.display = 'none';
       chatInterface.style.display = 'block';
       currentUserSpan.textContent = username;
       socket.emit('user joined', username);
     });
 
-    // ✉️ Send message
     messageForm.addEventListener('submit', (e) => {
       e.preventDefault();
       const text = messageInput.value.trim();
@@ -94,7 +104,6 @@
       }
     });
 
-    // ⌨️ Typing events
     messageInput.addEventListener('input', () => {
       if (!typing) {
         typing = true;
@@ -107,10 +116,13 @@
       }, 1000);
     });
 
-    // 🧱 Message renderer
-    function appendMessage({ text, user, time, self, delivered, seen }) {
+    const messageElements = new Map(); // messageId => DOM element
+
+    function appendMessage({ id, text, user, time, self, delivered, seen }) {
       const msgDiv = document.createElement('div');
       msgDiv.classList.add('message', self ? 'sent' : 'received');
+      msgDiv.dataset.messageId = id;
+      msgDiv.dataset.self = self;
 
       const content = document.createElement('div');
       content.textContent = self ? text : `${user}: ${text}`;
@@ -125,6 +137,7 @@
 
       if (self) {
         const tickSpan = document.createElement('span');
+        tickSpan.id = `tick-${id}`;
         tickSpan.innerHTML = seen ? '✔✔' : delivered ? '✔' : '';
         tickSpan.style.color = seen ? 'green' : '#ccc';
         meta.appendChild(tickSpan);
@@ -133,15 +146,29 @@
       msgDiv.appendChild(meta);
       messagesContainer.appendChild(msgDiv);
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+      if (!self && id) {
+        observer.observe(msgDiv);
+      }
+
+      if (id) {
+        messageElements.set(id, msgDiv);
+      }
     }
 
-    // ✅ Message received
     socket.on('chat message', (msg) => {
       const self = msg.user === username;
-      appendMessage({ ...msg, self, delivered: true, seen: true });
+      appendMessage({ ...msg, self, delivered: true, seen: self });
     });
 
-    // 🧍 Join/Leave notifications
+    socket.on('message seen', ({ messageId }) => {
+      const tick = document.getElementById(`tick-${messageId}`);
+      if (tick) {
+        tick.innerHTML = '✔✔';
+        tick.style.color = 'green';
+      }
+    });
+
     socket.on('user joined', (user) => {
       if (user !== username) {
         typingUsers.delete(user);
@@ -164,7 +191,6 @@
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
     });
 
-    // ✍️ Typing indicator
     socket.on('user typing', (user) => {
       if (user !== username) {
         typingUsers.add(user);
