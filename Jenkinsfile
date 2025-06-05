@@ -33,18 +33,14 @@ pipeline {
                 sh 'tar -czf chat-app.tar.gz app.js index.html public package.json'
                 archiveArtifacts artifacts: 'chat-app.tar.gz', fingerprint: true
                 
-                // Deploy using sshagent for better key handling
+                // Deploy using Ansible with sshagent for key handling
                 sshagent(['ec2-ssh-key']) {
                     sh '''
-                        # Copy files to EC2
+                        # Copy files to EC2 first
                         scp -o StrictHostKeyChecking=no chat-app.tar.gz ec2-user@3.16.220.117:/home/ec2-user/
                         
-                        # Extract and restart service
-                        ssh -o StrictHostKeyChecking=no ec2-user@3.16.220.117 "mkdir -p /home/ec2-user/chat-app && \
-                        tar -xzf /home/ec2-user/chat-app.tar.gz -C /home/ec2-user/chat-app && \
-                        cd /home/ec2-user/chat-app && \
-                        npm install && \
-                        sudo systemctl restart chat-app || echo 'Service not found, may need manual start'"
+                        # Run Ansible playbook
+                        ansible-playbook -i ansible-inventory.ini ansible-playbook.yml -e "ansible_ssh_common_args='-o StrictHostKeyChecking=no'"
                     '''
                 }
             }

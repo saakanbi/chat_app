@@ -3,7 +3,7 @@
   hosts: chat_servers
   become: yes
   vars:
-    app_dir: /var/www/chat-app
+    app_dir: /home/ec2-user/chat-app
     node_version: 16.x
 
   tasks:
@@ -22,6 +22,7 @@
           - nginx
           - git
           - curl
+          - lsof
         state: present
         enablerepo: epel
 
@@ -36,21 +37,13 @@
         name: nodejs
         state: present
 
-    - name: Create app directory
-      file:
-        path: "{{ app_dir }}"
-        state: directory
-        owner: ec2-user
-        group: ec2-user
-        mode: '0755'
-
-    - name: Copy application files
-      copy:
-        src: /home/ec2-user/chat-app/
+    - name: Extract application files
+      unarchive:
+        src: /home/ec2-user/chat-app.tar.gz
         dest: "{{ app_dir }}"
-        remote_src: no
+        remote_src: yes
       become_user: ec2-user
-
+      
     - name: Install npm dependencies
       npm:
         path: "{{ app_dir }}"
@@ -100,71 +93,44 @@
       systemd:
         daemon_reload: yes
 
+    - name: Stop chat-app service if running
+      systemd:
+        name: chat-app
+        state: stopped
+      ignore_errors: yes
+      
+    - name: Kill any processes using port 3000
+      shell: lsof -ti:3000 | xargs -r kill -9
+      ignore_errors: yes
+
     - name: Enable and start chat-app service
       systemd:
         name: chat-app
         state: started
         enabled: yes
 
-    - name: Restart Nginx
-      service:
+    - name: Enable and restart Nginx
+      systemd:
         name: nginx
         state: restarted
-
-- name: Configure Jenkins Server
-  hosts: jenkins
-  become: yes
-  tasks:
-    - name: Install Java 17
-      yum:
-        name: java-17-amazon-corretto
-        state: present
-
-    - name: Add Jenkins repository
-      get_url:
-        url: https://pkg.jenkins.io/redhat-stable/jenkins.repo
-        dest: /etc/yum.repos.d/jenkins.repo
-
-    - name: Import Jenkins key
-      rpm_key:
-        state: present
-        key: https://pkg.jenkins.io/redhat-stable/jenkins.io.key
-
-    - name: Install Jenkins
-      yum:
-        name: jenkins
-        state: present
-
-    - name: Start Jenkins service
-      systemd:
-        name: jenkins
-        state: started
         enabled: yes
-
-    - name: Wait for Jenkins to start
-      wait_for:
-        port: 8080
-        delay: 10
-        timeout: 300
-
-    - name: Get Jenkins initial admin password
-      shell: cat /var/lib/jenkins/secrets/initialAdminPassword
-      register: jenkins_password
+        
+    - name: Check chat-app service status
+      command: systemctl status chat-app
+      register: chat_app_status
       changed_when: false
-
-    - name: Display Jenkins initial admin password
+      ignore_errors: yes
+      
+    - name: Display chat-app service status
       debug:
-        msg: "Jenkins initial admin password: {{ jenkins_password.stdout }}"
-
-    - name: Install Git for Jenkins
-      yum:
-        name: git
-        state: present
-
-    - name: Copy Jenkinsfile to Jenkins home
-      copy:
-        src: /home/ec2-user/chat-app/Jenkinsfile
-        dest: /var/lib/jenkins/Jenkinsfile
-        owner: jenkins
-        group: jenkins
-        remote_src: yes
+        var: chat_app_status.stdout_lines
+        
+    - name: Check nginx service status
+      command: systemctl status nginx
+      register: nginx_status
+      changed_when: false
+      ignore_errors: yes
+      
+    - name: Display nginx service status
+      debug:
+        var: nginx_status.stdout_lines
