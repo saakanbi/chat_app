@@ -54,6 +54,7 @@
     const toggleBtn = document.getElementById('toggle-dark-mode');
     const icon = document.getElementById('mode-icon');
 
+    // 🌙 Load dark mode preference
     if (localStorage.getItem('darkMode') === 'true') {
       document.body.classList.add('dark-mode');
       icon.textContent = '🌞';
@@ -66,16 +67,21 @@
       icon.textContent = isDark ? '🌞' : '🌙';
     });
 
+    // ✅ Join chat with validation
     joinButton.addEventListener('click', () => {
       username = usernameInput.value.trim();
-      if (username) {
-        usernameForm.style.display = 'none';
-        chatInterface.style.display = 'block';
-        currentUserSpan.textContent = username;
-        socket.emit('user joined', username);
+      if (!username) {
+        alert("Please enter a username.");
+        return;
       }
+
+      usernameForm.style.display = 'none';
+      chatInterface.style.display = 'block';
+      currentUserSpan.textContent = username;
+      socket.emit('user joined', username);
     });
 
+    // ✉️ Send message
     messageForm.addEventListener('submit', (e) => {
       e.preventDefault();
       const text = messageInput.value.trim();
@@ -88,6 +94,7 @@
       }
     });
 
+    // ⌨️ Typing events
     messageInput.addEventListener('input', () => {
       if (!typing) {
         typing = true;
@@ -100,6 +107,7 @@
       }, 1000);
     });
 
+    // 🧱 Message renderer
     function appendMessage({ text, user, time, self, delivered, seen }) {
       const msgDiv = document.createElement('div');
       msgDiv.classList.add('message', self ? 'sent' : 'received');
@@ -123,4 +131,65 @@
       }
 
       msgDiv.appendChild(meta);
-      messagesContainer.appendChild(m
+      messagesContainer.appendChild(msgDiv);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    // ✅ Message received
+    socket.on('chat message', (msg) => {
+      const self = msg.user === username;
+      appendMessage({ ...msg, self, delivered: true, seen: true });
+    });
+
+    // 🧍 Join/Leave notifications
+    socket.on('user joined', (user) => {
+      if (user !== username) {
+        typingUsers.delete(user);
+        updateTypingIndicator();
+        const note = document.createElement('div');
+        note.className = 'system-message';
+        note.textContent = `${user} has joined the chat`;
+        messagesContainer.appendChild(note);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      }
+    });
+
+    socket.on('user left', (user) => {
+      typingUsers.delete(user);
+      updateTypingIndicator();
+      const note = document.createElement('div');
+      note.className = 'system-message';
+      note.textContent = `${user} has left the chat`;
+      messagesContainer.appendChild(note);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    });
+
+    // ✍️ Typing indicator
+    socket.on('user typing', (user) => {
+      if (user !== username) {
+        typingUsers.add(user);
+        updateTypingIndicator();
+      }
+    });
+
+    socket.on('user stopped typing', (user) => {
+      typingUsers.delete(user);
+      updateTypingIndicator();
+    });
+
+    function updateTypingIndicator() {
+      if (typingUsers.size === 0) {
+        typingIndicator.innerHTML = '';
+        return;
+      }
+
+      const names = Array.from(typingUsers);
+      const typingText = names.length === 1
+        ? `${names[0]} is typing`
+        : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]} are typing`;
+
+      typingIndicator.innerHTML = `<span>${typingText}</span>`;
+    }
+  </script>
+</body>
+</html>
