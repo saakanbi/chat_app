@@ -42,7 +42,6 @@
     let typingTimeout;
     const typingUsers = new Set();
 
-    // DOM elements
     const usernameForm = document.getElementById('username-form');
     const usernameInput = document.getElementById('username-input');
     const joinButton = document.getElementById('join-chat');
@@ -55,7 +54,6 @@
     const toggleBtn = document.getElementById('toggle-dark-mode');
     const icon = document.getElementById('mode-icon');
 
-    // 🌙 Dark mode
     if (localStorage.getItem('darkMode') === 'true') {
       document.body.classList.add('dark-mode');
       icon.textContent = '🌞';
@@ -83,8 +81,7 @@
       const text = messageInput.value.trim();
       if (text) {
         const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        appendMessage({ text, user: username, time, self: true, delivered: true, seen: false });
-        socket.emit('chat message', { text, user: username });
+        socket.emit('chat message', { text, user: username, time });
         messageInput.value = '';
         socket.emit('stop typing');
         typing = false;
@@ -126,60 +123,4 @@
       }
 
       msgDiv.appendChild(meta);
-      messagesContainer.appendChild(msgDiv);
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    }
-
-    socket.on('chat message', (msg) => {
-      const self = msg.user === username;
-      appendMessage({ ...msg, self, delivered: true, seen: true });
-    });
-
-    socket.on('user joined', (user) => {
-      if (user !== username) {
-        const note = document.createElement('div');
-        note.className = 'system-message';
-        note.textContent = `${user} has joined the chat`;
-        messagesContainer.appendChild(note);
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
-      }
-    });
-
-    socket.on('user left', (user) => {
-      typingUsers.delete(user);
-      updateTypingIndicator();
-      const note = document.createElement('div');
-      note.className = 'system-message';
-      note.textContent = `${user} has left the chat`;
-      messagesContainer.appendChild(note);
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    });
-
-    socket.on('user typing', (user) => {
-      if (user !== username) {
-        typingUsers.add(user);
-        updateTypingIndicator();
-      }
-    });
-
-    socket.on('user stopped typing', (user) => {
-      typingUsers.delete(user);
-      updateTypingIndicator();
-    });
-
-    function updateTypingIndicator() {
-      if (typingUsers.size === 0) {
-        typingIndicator.innerHTML = '';
-        return;
-      }
-
-      const names = Array.from(typingUsers);
-      const typingText = names.length === 1
-        ? `${names[0]} is typing`
-        : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]} are typing`;
-
-      typingIndicator.innerHTML = `<span>${typingText}</span>`;
-    }
-  </script>
-</body>
-</html>
+      messagesContainer.appendChild(m
