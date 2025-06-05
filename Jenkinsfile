@@ -1,23 +1,10 @@
 pipeline {
     agent any
     
-    tools {
-        nodejs 'NodeJS' // Use the NodeJS installation configured in Jenkins
-    }
-    
     stages {
         stage('Checkout') {
             steps {
                 checkout scm
-            }
-        }
-        
-        stage('Install Dependencies') {
-            steps {
-                // Use Docker to run npm install to avoid GLIBC version issues
-                sh '''
-                    docker run --rm -v "$PWD":/app -w /app node:16-alpine npm install
-                '''
             }
         }
         
@@ -56,6 +43,35 @@ pipeline {
                         ssh -o StrictHostKeyChecking=no ec2-user@3.16.220.117 "
                             cd ~/chat-app
                             ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i inventory.ini ansible-playbook.yml --connection=local
+                            
+                            # Install Node Exporter if not already installed
+                            if [ ! -f /usr/local/bin/node_exporter ]; then
+                                wget https://github.com/prometheus/node_exporter/releases/download/v1.5.0/node_exporter-1.5.0.linux-amd64.tar.gz
+                                tar xvfz node_exporter-1.5.0.linux-amd64.tar.gz
+                                sudo mv node_exporter-1.5.0.linux-amd64/node_exporter /usr/local/bin/
+                                sudo useradd -rs /bin/false node_exporter || true
+                                
+                                # Create systemd service
+                                sudo tee /etc/systemd/system/node_exporter.service > /dev/null << 'EOF'
+[Unit]
+Description=Node Exporter
+After=network.target
+
+[Service]
+User=node_exporter
+Group=node_exporter
+Type=simple
+ExecStart=/usr/local/bin/node_exporter --web.listen-address=0.0.0.0:9100
+
+[Install]
+WantedBy=multi-user.target
+EOF
+                                
+                                # Start and enable the service
+                                sudo systemctl daemon-reload
+                                sudo systemctl start node_exporter
+                                sudo systemctl enable node_exporter
+                            fi
                         "
                     '''
                 }
@@ -72,3 +88,6 @@ pipeline {
         }
     }
 }
+// This Jenkinsfile defines a pipeline for deploying a chat application to an EC2 instance.
+// It includes steps for packaging the application, deploying it using Ansible,
+// and setting up Node Exporter for monitoring with Prometheus and Grafana.

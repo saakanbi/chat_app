@@ -118,10 +118,10 @@ resource "aws_security_group" "ansible_controller_sg" {
   }
 }
 
-# Create Security Group for Jenkins
-resource "aws_security_group" "jenkins_sg" {
-  name        = "jenkins-sg"
-  description = "Security group for Jenkins server"
+# Create Security Group for Monitoring Tools
+resource "aws_security_group" "monitoring_sg" {
+  name        = "monitoring-sg"
+  description = "Security group for monitoring tools (Grafana and Prometheus)"
   vpc_id      = aws_vpc.chat_app_vpc.id
 
   # SSH access
@@ -132,12 +132,28 @@ resource "aws_security_group" "jenkins_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # Jenkins web interface
+  # Grafana web interface
   ingress {
-    from_port   = 8080
-    to_port     = 8080
+    from_port   = 3000
+    to_port     = 3000
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  # Prometheus web interface
+  ingress {
+    from_port   = 9090
+    to_port     = 9090
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  # Node exporter
+  ingress {
+    from_port   = 9100
+    to_port     = 9100
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/16"]
   }
 
   # Outbound traffic
@@ -149,7 +165,7 @@ resource "aws_security_group" "jenkins_sg" {
   }
 
   tags = {
-    Name = "jenkins-sg"
+    Name = "monitoring-sg"
   }
 }
 
@@ -188,17 +204,70 @@ resource "aws_instance" "ansible_controller" {
   EOF
 }
 
-# Create Jenkins EC2 instance
-resource "aws_instance" "jenkins_server" {
+# Create Grafana Server EC2 instance
+resource "aws_instance" "grafana_server" {
   ami                    = var.ami_id
   instance_type          = var.instance_type
   key_name               = var.key_name
   subnet_id              = aws_subnet.public_subnet.id
-  vpc_security_group_ids = [aws_security_group.jenkins_sg.id]
+  vpc_security_group_ids = [aws_security_group.monitoring_sg.id]
 
   tags = {
-    Name = "jenkins-server"
+    Name = "grafana-server"
   }
+
+  user_data = <<-EOF
+    #!/bin/bash
+    yum update -y
+    amazon-linux-extras install docker -y
+    systemctl start docker
+    systemctl enable docker
+    docker run -d -p 3000:3000 --name grafana grafana/grafana
+  EOF
+}
+
+# Create Prometheus Server EC2 instance
+resource "aws_instance" "prometheus_server" {
+  ami                    = var.ami_id
+  instance_type          = var.instance_type
+  key_name               = var.key_name
+  subnet_id              = aws_subnet.public_subnet.id
+  vpc_security_group_ids = [aws_security_group.monitoring_sg.id]
+
+  tags = {
+    Name = "prometheus-server"
+  }
+
+  user_data = <<-EOF
+    #!/bin/bash
+    yum update -y
+    amazon-linux-extras install docker -y
+    systemctl start docker
+    systemctl enable docker
+    
+    # Create prometheus config directory
+    mkdir -p /etc/prometheus
+    
+    # Create a basic prometheus.yml configuration
+    cat > /etc/prometheus/prometheus.yml << 'PROMCONFIG'
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+  
+  - job_name: 'chat-app'
+    static_configs:
+      - targets: ['${aws_instance.chat_app_server.private_ip}:9100']
+PROMCONFIG
+
+    # Run Prometheus with the configuration
+    docker run -d -p 9090:9090 --name prometheus \
+      -v /etc/prometheus:/etc/prometheus \
+      prom/prometheus --config.file=/etc/prometheus/prometheus.yml
+  EOF
 }
 
 # Allocate Elastic IP for Chat App
@@ -219,12 +288,21 @@ resource "aws_eip" "ansible_controller_eip" {
   }
 }
 
-# Allocate Elastic IP for Jenkins
-resource "aws_eip" "jenkins_eip" {
-  instance = aws_instance.jenkins_server.id
+# Allocate Elastic IP for Grafana
+resource "aws_eip" "grafana_eip" {
+  instance = aws_instance.grafana_server.id
   domain   = "vpc"
   tags = {
-    Name = "jenkins-eip"
+    Name = "grafana-eip"
+  }
+}
+
+# Allocate Elastic IP for Prometheus
+resource "aws_eip" "prometheus_eip" {
+  instance = aws_instance.prometheus_server.id
+  domain   = "vpc"
+  tags = {
+    Name = "prometheus-eip"
   }
 }
 
