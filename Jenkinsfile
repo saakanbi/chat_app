@@ -29,35 +29,30 @@ pipeline {
         
         stage('Deploy to EC2') {
             steps {
+                // Create deployment package
+                sh 'tar -czf chat-app.tar.gz app.js index.html public package.json'
+                archiveArtifacts artifacts: 'chat-app.tar.gz', fingerprint: true
+                
+                // Deploy using SSH with key directly
                 withCredentials([sshUserPrivateKey(credentialsId: 'ec2-ssh-key', keyFileVariable: 'SSH_KEY')]) {
-                    // Use scp to directly copy files to EC2
                     sh '''
-                        # Create a temporary SSH config
-                        mkdir -p ~/.ssh
-                        cat > ~/.ssh/config << EOF
-Host ec2-server
-    HostName 3.16.220.117
-    User ec2-user
-    IdentityFile $SSH_KEY
-    StrictHostKeyChecking no
-EOF
-                        chmod 600 ~/.ssh/config
-                        
-                        # Create deployment package
-                        tar -czf chat-app.tar.gz app.js index.html public package.json
+                        # Create a temporary key file with correct permissions
+                        SSH_KEY_FILE=$(mktemp)
+                        cat "$SSH_KEY" > "$SSH_KEY_FILE"
+                        chmod 600 "$SSH_KEY_FILE"
                         
                         # Copy files to EC2
-                        scp -F ~/.ssh/config chat-app.tar.gz ec2-server:/home/ec2-user/
+                        scp -o StrictHostKeyChecking=no -i "$SSH_KEY_FILE" chat-app.tar.gz ec2-user@3.16.220.117:/home/ec2-user/
                         
                         # Extract and restart service
-                        ssh -F ~/.ssh/config ec2-server "mkdir -p /home/ec2-user/chat-app && \
+                        ssh -o StrictHostKeyChecking=no -i "$SSH_KEY_FILE" ec2-user@3.16.220.117 "mkdir -p /home/ec2-user/chat-app && \
                         tar -xzf /home/ec2-user/chat-app.tar.gz -C /home/ec2-user/chat-app && \
                         cd /home/ec2-user/chat-app && \
                         npm install && \
                         sudo systemctl restart chat-app || echo 'Service not found, may need manual start'"
                         
-                        # Archive locally
-                        archiveArtifacts artifacts: 'chat-app.tar.gz', fingerprint: true
+                        # Clean up
+                        rm -f "$SSH_KEY_FILE"
                     '''
                 }
             }
