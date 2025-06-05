@@ -33,26 +33,18 @@ pipeline {
                 sh 'tar -czf chat-app.tar.gz app.js index.html public package.json'
                 archiveArtifacts artifacts: 'chat-app.tar.gz', fingerprint: true
                 
-                // Deploy using SSH with key directly
-                withCredentials([sshUserPrivateKey(credentialsId: 'ec2-ssh-key', keyFileVariable: 'SSH_KEY')]) {
+                // Deploy using sshagent for better key handling
+                sshagent(['ec2-ssh-key']) {
                     sh '''
-                        # Create a temporary key file with correct permissions
-                        SSH_KEY_FILE=$(mktemp)
-                        cat "$SSH_KEY" > "$SSH_KEY_FILE"
-                        chmod 600 "$SSH_KEY_FILE"
-                        
                         # Copy files to EC2
-                        scp -o StrictHostKeyChecking=no -i "$SSH_KEY_FILE" chat-app.tar.gz ec2-user@3.16.220.117:/home/ec2-user/
+                        scp -o StrictHostKeyChecking=no chat-app.tar.gz ec2-user@3.16.220.117:/home/ec2-user/
                         
                         # Extract and restart service
-                        ssh -o StrictHostKeyChecking=no -i "$SSH_KEY_FILE" ec2-user@3.16.220.117 "mkdir -p /home/ec2-user/chat-app && \
+                        ssh -o StrictHostKeyChecking=no ec2-user@3.16.220.117 "mkdir -p /home/ec2-user/chat-app && \
                         tar -xzf /home/ec2-user/chat-app.tar.gz -C /home/ec2-user/chat-app && \
                         cd /home/ec2-user/chat-app && \
                         npm install && \
                         sudo systemctl restart chat-app || echo 'Service not found, may need manual start'"
-                        
-                        # Clean up
-                        rm -f "$SSH_KEY_FILE"
                     '''
                 }
             }
