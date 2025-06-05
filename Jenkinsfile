@@ -30,7 +30,7 @@ pipeline {
         stage('Deploy to EC2') {
             steps {
                 // Create deployment package
-                sh 'tar -czf chat-app.tar.gz app.js index.html public package.json ansible-playbook.yml inventory.ini'
+                sh 'tar -czf chat-app.tar.gz app.js index.html public package.json ansible-playbook.yml inventory.ini ansible.cfg'
                 archiveArtifacts artifacts: 'chat-app.tar.gz', fingerprint: true
                 
                 // Deploy using sshagent for key handling
@@ -52,10 +52,10 @@ pipeline {
                             fi
                         "
                         
-                        # Run Ansible playbook
+                        # Run Ansible playbook with local connection
                         ssh -o StrictHostKeyChecking=no ec2-user@3.16.220.117 "
                             cd ~/chat-app
-                            ansible-playbook -i inventory.ini ansible-playbook.yml
+                            ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i inventory.ini ansible-playbook.yml --connection=local
                         "
                     '''
                 }
