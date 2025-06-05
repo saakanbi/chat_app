@@ -307,14 +307,12 @@ body.dark-mode .system-message {
   border-left: 3px solid #000;
 }
 
-body.dark-mode .quoted-message {
-  background-color: rgba(255, 255, 255, 0.8);
-  color: #000;
-}
-
+body.dark-mode .quoted-message,
 body.dark-mode .sent .quoted-message {
-  background-color: rgba(255, 255, 255, 0.8);
+  background-color: rgba(255, 255, 255, 0.9);
   color: #000;
+  border-left: 3px solid #fff;
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
 }
 
 /* Emoji picker styling */
