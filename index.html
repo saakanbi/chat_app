@@ -1,46 +1,35 @@
-
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
   <title>CEEYIT Chat</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #f5f5f5; }
-    .container { max-width: 800px; margin: 0 auto; padding: 20px; }
-    .chat-container { background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-    .chat-header { background: #4a69bd; color: white; padding: 15px; border-radius: 8px 8px 0 0; text-align: center; }
-    .chat-messages { height: 400px; padding: 15px; overflow-y: auto; }
-    .message { margin-bottom: 10px; padding: 8px 12px; border-radius: 20px; max-width: 70%; }
-    .received { background: #e9e9eb; float: left; clear: both; }
-    .sent { background: #0b93f6; color: white; float: right; clear: both; }
-    .message-form { display: flex; padding: 15px; border-top: 1px solid #e9e9eb; }
-    .message-input { flex-grow: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px; margin-right: 10px; }
-    .send-button { background: #4a69bd; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; }
-    .username-container { text-align: center; margin-bottom: 20px; }
-    .username-input { padding: 10px; width: 200px; margin-right: 10px; }
-    .join-button { background: #4a69bd; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; }
-    .system-message { text-align: center; color: #888; margin: 10px 0; clear: both; }
-    .clearfix::after { content: ""; clear: both; display: table; }
-  </style>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="container">
-    <h1 style="text-align: center;">CEEYIT Real-Time Chat App</h1>
-    
+    <h1>CEEYIT Real-Time Chat App</h1>
+
+    <div style="text-align: center; margin-bottom: 20px;">
+      <button id="toggle-dark-mode" class="join-button" style="font-size: 18px;">
+        <span id="mode-icon">🌙</span> Toggle Theme
+      </button>
+    </div>
+
     <div id="username-form" class="username-container">
       <input type="text" id="username-input" class="username-input" placeholder="Enter your username">
       <button id="join-chat" class="join-button">Join Chat</button>
     </div>
-    
+
     <div id="chat-interface" class="chat-container" style="display: none;">
       <div class="chat-header">
         <h2>Chat Room</h2>
         <p>Connected as: <span id="current-user"></span></p>
       </div>
       <div id="messages" class="chat-messages"></div>
-      <div class="clearfix"></div>
+      <div id="typing-indicator"></div>
       <form id="message-form" class="message-form">
         <input id="message-input" class="message-input" autocomplete="off" placeholder="Type a message...">
-        <button class="send-button">Send</button>
+        <button class="send-button" type="submit">Send</button>
       </form>
     </div>
   </div>
@@ -49,7 +38,10 @@
   <script>
     const socket = io();
     let username = '';
-    
+    let typing = false;
+    let typingTimeout;
+    const typingUsers = new Set();
+
     // DOM elements
     const usernameForm = document.getElementById('username-form');
     const usernameInput = document.getElementById('username-input');
@@ -59,67 +51,135 @@
     const messagesContainer = document.getElementById('messages');
     const messageForm = document.getElementById('message-form');
     const messageInput = document.getElementById('message-input');
-    
-    // Join chat event
+    const typingIndicator = document.getElementById('typing-indicator');
+    const toggleBtn = document.getElementById('toggle-dark-mode');
+    const icon = document.getElementById('mode-icon');
+
+    // 🌙 Dark mode
+    if (localStorage.getItem('darkMode') === 'true') {
+      document.body.classList.add('dark-mode');
+      icon.textContent = '🌞';
+    }
+
+    toggleBtn.addEventListener('click', () => {
+      document.body.classList.toggle('dark-mode');
+      const isDark = document.body.classList.contains('dark-mode');
+      localStorage.setItem('darkMode', isDark);
+      icon.textContent = isDark ? '🌞' : '🌙';
+    });
+
     joinButton.addEventListener('click', () => {
       username = usernameInput.value.trim();
       if (username) {
         usernameForm.style.display = 'none';
         chatInterface.style.display = 'block';
         currentUserSpan.textContent = username;
-        
-        // Emit user joined event
         socket.emit('user joined', username);
       }
     });
-    
-    // Send message event
+
     messageForm.addEventListener('submit', (e) => {
       e.preventDefault();
-      const message = messageInput.value.trim();
-      if (message) {
-        // Emit chat message event
-        socket.emit('chat message', { text: message, user: username });
+      const text = messageInput.value.trim();
+      if (text) {
+        const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        appendMessage({ text, user: username, time, self: true, delivered: true, seen: false });
+        socket.emit('chat message', { text, user: username });
         messageInput.value = '';
+        socket.emit('stop typing');
+        typing = false;
       }
     });
-    
-    // Receive chat message
-    socket.on('chat message', (msg) => {
-      const messageElement = document.createElement('div');
-      messageElement.classList.add('message');
-      
-      if (msg.user === username) {
-        messageElement.classList.add('sent');
-        messageElement.textContent = msg.text;
-      } else {
-        messageElement.classList.add('received');
-        messageElement.textContent = `${msg.user}: ${msg.text}`;
+
+    messageInput.addEventListener('input', () => {
+      if (!typing) {
+        typing = true;
+        socket.emit('typing');
       }
-      
-      messagesContainer.appendChild(messageElement);
+      clearTimeout(typingTimeout);
+      typingTimeout = setTimeout(() => {
+        typing = false;
+        socket.emit('stop typing');
+      }, 1000);
+    });
+
+    function appendMessage({ text, user, time, self, delivered, seen }) {
+      const msgDiv = document.createElement('div');
+      msgDiv.classList.add('message', self ? 'sent' : 'received');
+
+      const content = document.createElement('div');
+      content.textContent = self ? text : `${user}: ${text}`;
+      msgDiv.appendChild(content);
+
+      const meta = document.createElement('div');
+      meta.classList.add('message-meta');
+
+      const timeSpan = document.createElement('span');
+      timeSpan.textContent = time || '';
+      meta.appendChild(timeSpan);
+
+      if (self) {
+        const tickSpan = document.createElement('span');
+        tickSpan.innerHTML = seen ? '✔✔' : delivered ? '✔' : '';
+        tickSpan.style.color = seen ? 'green' : '#ccc';
+        meta.appendChild(tickSpan);
+      }
+
+      msgDiv.appendChild(meta);
+      messagesContainer.appendChild(msgDiv);
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    socket.on('chat message', (msg) => {
+      const self = msg.user === username;
+      appendMessage({ ...msg, self, delivered: true, seen: true });
     });
-    
-    // User joined notification
+
     socket.on('user joined', (user) => {
       if (user !== username) {
-        const notification = document.createElement('div');
-        notification.classList.add('system-message');
-        notification.textContent = `${user} has joined the chat`;
-        messagesContainer.appendChild(notification);
+        const note = document.createElement('div');
+        note.className = 'system-message';
+        note.textContent = `${user} has joined the chat`;
+        messagesContainer.appendChild(note);
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
       }
     });
-    
-    // User left notification
+
     socket.on('user left', (user) => {
-      const notification = document.createElement('div');
-      notification.classList.add('system-message');
-      notification.textContent = `${user} has left the chat`;
-      messagesContainer.appendChild(notification);
+      typingUsers.delete(user);
+      updateTypingIndicator();
+      const note = document.createElement('div');
+      note.className = 'system-message';
+      note.textContent = `${user} has left the chat`;
+      messagesContainer.appendChild(note);
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
     });
+
+    socket.on('user typing', (user) => {
+      if (user !== username) {
+        typingUsers.add(user);
+        updateTypingIndicator();
+      }
+    });
+
+    socket.on('user stopped typing', (user) => {
+      typingUsers.delete(user);
+      updateTypingIndicator();
+    });
+
+    function updateTypingIndicator() {
+      if (typingUsers.size === 0) {
+        typingIndicator.innerHTML = '';
+        return;
+      }
+
+      const names = Array.from(typingUsers);
+      const typingText = names.length === 1
+        ? `${names[0]} is typing`
+        : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]} are typing`;
+
+      typingIndicator.innerHTML = `<span>${typingText}</span>`;
+    }
   </script>
 </body>
 </html>
