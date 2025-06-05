@@ -89,86 +89,6 @@ h1 {
   border-bottom-left-radius: 4px;
 }
 
-.message-content {
-  white-space: pre-wrap;
-}
-
-.quoted-message {
-  padding: 5px 10px;
-  margin-bottom: 5px;
-  border-left: 3px solid #aaa;
-  background-color: rgba(0, 0, 0, 0.05);
-  border-radius: 4px;
-  font-size: 0.9em;
-  color: #666;
-}
-
-.sent .quoted-message {
-  background-color: rgba(255, 255, 255, 0.2);
-  color: #eee;
-}
-
-.emoji-picker {
-  position: absolute;
-  bottom: 70px;
-  right: 20px;
-  background: white;
-  border: 1px solid #ddd;
-  border-radius: 5px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  padding: 10px;
-  display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  gap: 5px;
-  z-index: 100;
-}
-
-.message-content {
-  white-space: pre-wrap;
-}
-
-.quoted-message {
-  padding: 5px 10px;
-  margin-bottom: 5px;
-  border-left: 3px solid #aaa;
-  background-color: rgba(0, 0, 0, 0.05);
-  border-radius: 4px;
-  font-size: 0.9em;
-  color: #666;
-}
-
-.sent .quoted-message {
-  background-color: rgba(255, 255, 255, 0.2);
-  color: #eee;
-}
-
-.emoji-picker {
-  position: absolute;
-  bottom: 70px;
-  right: 20px;
-  background: white;
-  border: 1px solid #ddd;
-  border-radius: 5px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  padding: 10px;
-  display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  gap: 5px;
-  z-index: 100;
-}
-
-.emoji-btn {
-  cursor: pointer;
-  font-size: 20px;
-  padding: 5px;
-  border-radius: 4px;
-  text-align: center;
-}
-
-.emoji-btn:hover {
-  background-color: #f0f0f0;
-}
-
 .message-meta {
   font-size: 12px;
   color: #bbb;
@@ -363,36 +283,38 @@ body.dark-mode .message-meta {
 body.dark-mode .system-message {
   color: #aaa;
 }
-.emoji-btn {
-  cursor: pointer;
-  font-size: 20px;
-  padding: 5px;
-  border-radius: 4px;
-  text-align: center;
-}
 
-.emoji-btn:hover {
-  background-color: #f0f0f0;
-}
 /* Message content styling */
 .message-content {
   white-space: pre-wrap;
 }
 
-/* Quoted message styling */
+/* Quoted message styling - IMPROVED VISIBILITY */
 .quoted-message {
   padding: 5px 10px;
   margin-bottom: 5px;
-  border-left: 3px solid #aaa;
-  background-color: rgba(0, 0, 0, 0.05);
+  border-left: 3px solid #000;
+  background-color: rgba(255, 255, 255, 0.7);
   border-radius: 4px;
   font-size: 0.9em;
-  color: #666;
+  color: #000;
+  font-weight: 500;
 }
 
 .sent .quoted-message {
-  background-color: rgba(255, 255, 255, 0.2);
-  color: #eee;
+  background-color: rgba(255, 255, 255, 0.7);
+  color: #000;
+  border-left: 3px solid #000;
+}
+
+body.dark-mode .quoted-message {
+  background-color: rgba(255, 255, 255, 0.8);
+  color: #000;
+}
+
+body.dark-mode .sent .quoted-message {
+  background-color: rgba(255, 255, 255, 0.8);
+  color: #000;
 }
 
 /* Emoji picker styling */
@@ -421,14 +343,4 @@ body.dark-mode .system-message {
 
 .emoji-btn:hover {
   background-color: #f0f0f0;
-}
-
-/* Make messages clickable for quoting */
-.message {
-  cursor: pointer;
-}
-
-/* Position relative for message form */
-.message-form {
-  position: relative;
 }
