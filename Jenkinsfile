@@ -42,6 +42,7 @@ pipeline {
                             tar -xzf ~/chat-app.tar.gz -C ~/chat-app
                             cd ~/chat-app
                             npm install
+                            sudo npm install -g pm2
                             pm2 restart app.js || pm2 start app.js
                         "
                     '''
@@ -55,6 +56,9 @@ pipeline {
                     sh '''
                         # Install Prometheus directly
                         ssh -o StrictHostKeyChecking=no ec2-user@3.137.216.22 "
+                            # Install required packages
+                            sudo yum install -y wget
+                            
                             # Create Prometheus user
                             sudo useradd -M -r -s /bin/false prometheus || true
                             
@@ -158,6 +162,9 @@ EOF
                     sh '''
                         # Install Grafana directly
                         ssh -o StrictHostKeyChecking=no ec2-user@18.226.222.40 "
+                            # Install required packages
+                            sudo yum install -y wget
+                            
                             # Add Grafana repo
                             sudo tee /etc/yum.repos.d/grafana.repo > /dev/null << 'EOF'
 [grafana]
