@@ -90,7 +90,14 @@ EOF
                         # Install Prometheus directly
                         ssh -o StrictHostKeyChecking=no ec2-user@3.137.216.22 "
                             # Install required packages
-                            sudo yum install -y wget
+                            sudo yum install -y wget firewalld
+                            
+                            # Configure firewall
+                            sudo systemctl enable firewalld
+                            sudo systemctl start firewalld
+                            sudo firewall-cmd --permanent --add-port=9090/tcp
+                            sudo firewall-cmd --permanent --add-port=9100/tcp
+                            sudo firewall-cmd --reload
                             
                             # Create Prometheus user
                             sudo useradd -M -r -s /bin/false prometheus || true
@@ -122,12 +129,7 @@ scrape_configs:
   
   - job_name: 'node_exporter'
     static_configs:
-      - targets: ['3.137.216.22:9100', '18.226.222.40:9100']
-  
-  - job_name: 'jenkins'
-    metrics_path: /prometheus/
-    static_configs:
-      - targets: ['3.148.26.127:8080']
+      - targets: ['3.137.216.22:9100', '18.226.222.40:9100', '3.16.220.117:9100']
 EOF
                             
                             # Create systemd service
@@ -196,7 +198,14 @@ EOF
                         # Install Grafana directly
                         ssh -o StrictHostKeyChecking=no ec2-user@18.226.222.40 "
                             # Install required packages
-                            sudo yum install -y wget
+                            sudo yum install -y wget firewalld
+                            
+                            # Configure firewall
+                            sudo systemctl enable firewalld
+                            sudo systemctl start firewalld
+                            sudo firewall-cmd --permanent --add-port=3000/tcp
+                            sudo firewall-cmd --permanent --add-port=9100/tcp
+                            sudo firewall-cmd --reload
                             
                             # Add Grafana repo
                             sudo tee /etc/yum.repos.d/grafana.repo > /dev/null << 'EOF'
@@ -263,6 +272,46 @@ EOF
                                 \"access\":\"proxy\",
                                 \"basicAuth\":false
                             }' http://admin:admin@localhost:3000/api/datasources || true
+                        "
+                    '''
+                }
+            }
+        }
+        
+        stage('Configure Chat App Monitoring') {
+            steps {
+                sshagent(['ec2-ssh-key']) {
+                    sh '''
+                        # Install Node Exporter on Chat App server
+                        ssh -o StrictHostKeyChecking=no ec2-user@3.16.220.117 "
+                            # Install Node Exporter
+                            wget -q https://github.com/prometheus/node_exporter/releases/download/v1.5.0/node_exporter-1.5.0.linux-amd64.tar.gz -O /tmp/node_exporter.tar.gz
+                            tar -xf /tmp/node_exporter.tar.gz -C /tmp
+                            sudo cp /tmp/node_exporter-1.5.0.linux-amd64/node_exporter /usr/local/bin/
+                            sudo useradd -rs /bin/false node_exporter || true
+                            
+                            sudo tee /etc/systemd/system/node_exporter.service > /dev/null << 'EOF'
+[Unit]
+Description=Node Exporter
+After=network.target
+
+[Service]
+User=node_exporter
+Group=node_exporter
+Type=simple
+ExecStart=/usr/local/bin/node_exporter
+
+[Install]
+WantedBy=multi-user.target
+EOF
+                            
+                            # Open firewall for Node Exporter
+                            sudo firewall-cmd --permanent --add-port=9100/tcp
+                            sudo firewall-cmd --reload
+                            
+                            sudo systemctl daemon-reload
+                            sudo systemctl enable node_exporter
+                            sudo systemctl restart node_exporter
                         "
                     '''
                 }
