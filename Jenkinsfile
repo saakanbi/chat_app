@@ -73,10 +73,18 @@ EOF
                             sudo firewall-cmd --permanent --add-service=https
                             sudo firewall-cmd --reload
                             
+                            # Install required dependencies
+                            npm install express socket.io uuid
+                            
                             # Start the application with PM2
                             pm2 restart app.js || pm2 start app.js
                             pm2 save
                             sudo env PATH=\$PATH:/usr/bin pm2 startup systemd -u ec2-user --hp /home/ec2-user
+                            
+                            # Check if app is running
+                            echo "Checking if app is running..."
+                            sleep 5
+                            curl -s http://localhost:3000 || echo "App not responding on port 3000"
                         "
                     '''
                 }
