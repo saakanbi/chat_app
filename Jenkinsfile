@@ -351,6 +351,46 @@ EOF
                 }
             }
         }
+        
+        stage('Fix Chat App Connectivity') {
+            steps {
+                sshagent(['ec2-ssh-key']) {
+                    sh '''
+                        ssh -o StrictHostKeyChecking=no ec2-user@3.16.220.117 "
+                            # Modify app.js to listen on all interfaces
+                            cd ~/chat-app
+                            sed -i 's/server.listen(PORT, () => console.log/server.listen(PORT, \\'0.0.0.0\\', () => console.log/g' app.js
+                            
+                            # Disable firewall completely for testing
+                            sudo systemctl stop firewalld
+                            
+                            # Restart the application
+                            pm2 restart app.js
+                            
+                            # Check if app is running
+                            echo 'Checking app status:'
+                            pm2 status
+                            
+                            # Check listening ports
+                            echo 'Checking listening ports:'
+                            sudo netstat -tulpn | grep LISTEN
+                            
+                            # Check if nginx is running
+                            echo 'Checking nginx status:'
+                            sudo systemctl status nginx
+                            
+                            # Restart nginx
+                            sudo systemctl restart nginx
+                            
+                            # Test connectivity
+                            echo 'Testing local connectivity:'
+                            curl -v http://localhost:3000
+                            curl -v http://127.0.0.1:80
+                        "
+                    '''
+                }
+            }
+        }
     }
     
     post {

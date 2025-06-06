@@ -1,5 +1,0 @@
-aws_region = "us-east-2"
-ami_id = "ami-0aeeeef9c37751b0b"
-instance_type = "t2.medium"
-key_name = "saturday"
-chat_app_private_ip = "10.0.1.123"  # Replace with your chat app's actual private IP
