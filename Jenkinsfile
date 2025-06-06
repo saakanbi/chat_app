@@ -43,7 +43,40 @@ pipeline {
                             cd ~/chat-app
                             npm install
                             sudo npm install -g pm2
+                            
+                            # Configure Nginx as reverse proxy
+                            sudo yum install -y nginx
+                            sudo tee /etc/nginx/conf.d/chat-app.conf > /dev/null << 'EOF'
+server {
+    listen 80;
+    server_name _;
+
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host \$host;
+        proxy_cache_bypass \$http_upgrade;
+    }
+}
+EOF
+                            sudo rm -f /etc/nginx/conf.d/default.conf
+                            sudo systemctl enable nginx
+                            sudo systemctl restart nginx
+                            
+                            # Configure security for ports 80 and 443
+                            sudo yum install -y firewalld
+                            sudo systemctl enable firewalld
+                            sudo systemctl start firewalld
+                            sudo firewall-cmd --permanent --add-service=http
+                            sudo firewall-cmd --permanent --add-service=https
+                            sudo firewall-cmd --reload
+                            
+                            # Start the application with PM2
                             pm2 restart app.js || pm2 start app.js
+                            pm2 save
+                            sudo env PATH=\$PATH:/usr/bin pm2 startup systemd -u ec2-user --hp /home/ec2-user
                         "
                     '''
                 }
