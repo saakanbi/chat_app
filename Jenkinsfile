@@ -65,26 +65,37 @@ EOF
                             sudo systemctl enable nginx
                             sudo systemctl restart nginx
                             
-                            # Configure security for ports 80 and 443
+                            # Configure security for ports 80, 443, and 3000
                             sudo yum install -y firewalld
                             sudo systemctl enable firewalld
                             sudo systemctl start firewalld
                             sudo firewall-cmd --permanent --add-service=http
                             sudo firewall-cmd --permanent --add-service=https
+                            sudo firewall-cmd --permanent --add-port=3000/tcp
                             sudo firewall-cmd --reload
                             
                             # Install required dependencies
                             npm install express socket.io uuid
                             
                             # Start the application with PM2
-                            pm2 restart app.js || pm2 start app.js
+                            pm2 restart app.js || pm2 start app.js --name "chat-app" -- --port 3000
                             pm2 save
                             sudo env PATH=\$PATH:/usr/bin pm2 startup systemd -u ec2-user --hp /home/ec2-user
                             
-                            # Check if app is running
+                            # Check if app is running and verify network connectivity
                             echo "Checking if app is running..."
                             sleep 5
                             curl -s http://localhost:3000 || echo "App not responding on port 3000"
+                            
+                            # Verify network connectivity and port status
+                            sudo netstat -tulpn | grep 3000
+                            sudo ss -tulpn | grep 3000
+                            
+                            # Ensure SELinux is not blocking connections (if enabled)
+                            sudo semanage port -l | grep http_port_t || echo "SELinux management tools not available"
+                            
+                            # Temporarily disable SELinux for testing if needed
+                            sudo setenforce 0 || echo "SELinux not installed"
                         "
                     '''
                 }
