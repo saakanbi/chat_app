@@ -1,11 +1,6 @@
-output "grafana_public_ip" {
-  value       = aws_instance.grafana_server.public_ip
-  description = "Public IP address of the Grafana server"
-}
-
-output "prometheus_public_ip" {
-  value       = aws_instance.prometheus_server.public_ip
-  description = "Public IP address of the Prometheus server"
+output "monitoring_public_ip" {
+  value       = aws_instance.monitoring_server.public_ip
+  description = "Public IP address of the monitoring server (Grafana and Prometheus)"
 }
 
 output "monitoring_vpc_id" {

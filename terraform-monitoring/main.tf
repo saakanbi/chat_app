@@ -91,8 +91,8 @@ resource "aws_security_group" "monitoring_sg" {
   }
 }
 
-# Grafana Server EC2 instance
-resource "aws_instance" "grafana_server" {
+# Monitoring Server EC2 instance (combined Grafana and Prometheus)
+resource "aws_instance" "monitoring_server" {
   ami                         = var.ami_id
   instance_type               = var.instance_type
   key_name                    = var.key_name
@@ -101,7 +101,7 @@ resource "aws_instance" "grafana_server" {
   associate_public_ip_address = true
 
   tags = {
-    Name = "grafana-server"
+    Name = "monitoring-server"
   }
 
   user_data = <<-EOF
@@ -223,82 +223,6 @@ curl -s -X POST \
   http://admin:admin@localhost:3000/api/dashboards/db
 
 echo "Monitoring setup complete!"
-SCRIPT
-
-    # Make script executable
-    chmod +x /home/ec2-user/monitoring-setup.sh
-    
-    # Run the setup script
-    /home/ec2-user/monitoring-setup.sh
-    
-    # Add to crontab to run on reboot
-    (crontab -l 2>/dev/null; echo "@reboot /home/ec2-user/monitoring-setup.sh") | crontab -
-  EOF
-}
-
-# Prometheus Server EC2 instance
-resource "aws_instance" "prometheus_server" {
-  ami                         = var.ami_id
-  instance_type               = var.instance_type
-  key_name                    = var.key_name
-  subnet_id                   = aws_subnet.public_subnet.id
-  vpc_security_group_ids      = [aws_security_group.monitoring_sg.id]
-  associate_public_ip_address = true
-
-  tags = {
-    Name = "prometheus-server"
-  }
-
-  user_data = <<-EOF
-    #!/bin/bash
-    yum update -y
-    amazon-linux-extras install docker -y
-    systemctl start docker
-    systemctl enable docker
-    
-    # Create monitoring setup script
-    cat > /home/ec2-user/monitoring-setup.sh << 'SCRIPT'
-#!/bin/bash
-# Script to configure Prometheus on startup
-
-# Create directories for persistent storage
-mkdir -p /var/lib/prometheus_data
-
-# Set permissions
-chown -R 65534:65534 /var/lib/prometheus_data
-
-# Create prometheus config directory
-mkdir -p /etc/prometheus
-
-# Create a basic prometheus.yml configuration
-cat > /etc/prometheus/prometheus.yml << 'CONFIG'
-global:
-  scrape_interval: 15s
-  scrape_timeout: 10s
-
-scrape_configs:
-  - job_name: 'prometheus'
-    static_configs:
-      - targets: ['localhost:9090']
-  
-  - job_name: 'chat-app'
-    static_configs:
-      - targets: ['${var.chat_app_private_ip}:9100']
-CONFIG
-
-# Stop existing container if running
-docker stop prometheus || true
-docker rm prometheus || true
-
-# Run Prometheus with persistent storage
-docker run -d -p 9090:9090 --name prometheus \
-  -v /etc/prometheus:/etc/prometheus \
-  -v /var/lib/prometheus_data:/prometheus \
-  prom/prometheus \
-  --config.file=/etc/prometheus/prometheus.yml \
-  --storage.tsdb.path=/prometheus
-
-echo "Prometheus setup complete!"
 SCRIPT
 
     # Make script executable
