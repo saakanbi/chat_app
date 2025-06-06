@@ -99,6 +99,9 @@ EOF
                             sudo firewall-cmd --permanent --add-port=9100/tcp
                             sudo firewall-cmd --reload
                             
+                            # Disable firewalld temporarily for testing
+                            sudo systemctl stop firewalld
+                            
                             # Create Prometheus user
                             sudo useradd -M -r -s /bin/false prometheus || true
                             
@@ -206,6 +209,9 @@ EOF
                             sudo firewall-cmd --permanent --add-port=3000/tcp
                             sudo firewall-cmd --permanent --add-port=9100/tcp
                             sudo firewall-cmd --reload
+                            
+                            # Disable firewalld temporarily for testing
+                            sudo systemctl stop firewalld
                             
                             # Add Grafana repo
                             sudo tee /etc/yum.repos.d/grafana.repo > /dev/null << 'EOF'
