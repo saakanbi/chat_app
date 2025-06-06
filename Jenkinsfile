@@ -58,6 +58,9 @@ server {
         proxy_set_header Connection 'upgrade';
         proxy_set_header Host \$host;
         proxy_cache_bypass \$http_upgrade;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
     }
 }
 EOF
@@ -74,11 +77,14 @@ EOF
                             sudo firewall-cmd --permanent --add-port=3000/tcp
                             sudo firewall-cmd --reload
                             
+                            # Temporarily disable firewall for testing
+                            sudo systemctl stop firewalld
+                            
                             # Install required dependencies
                             npm install express socket.io uuid
                             
                             # Start the application with PM2
-                            pm2 restart app.js || pm2 start app.js --name "chat-app" -- --port 3000
+                            pm2 restart app.js || pm2 start app.js --name "chat-app"
                             pm2 save
                             sudo env PATH=\$PATH:/usr/bin pm2 startup systemd -u ec2-user --hp /home/ec2-user
                             
@@ -86,6 +92,9 @@ EOF
                             echo "Checking if app is running..."
                             sleep 5
                             curl -s http://localhost:3000 || echo "App not responding on port 3000"
+                            
+                            # Restart the application to apply any changes
+                            pm2 restart app.js
                             
                             # Verify network connectivity and port status
                             sudo netstat -tulpn | grep 3000
